@@ -11,8 +11,10 @@ type apiConfig struct {
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	cfg.fileServerHits.Add(1)
-	return next
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg.fileServerHits.Add(1)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
@@ -20,6 +22,13 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(200)
 	response := fmt.Sprint("Hits: ", cfg.fileServerHits.Load())
 	w.Write([]byte(response))
+}
+
+func (cfg *apiConfig) metricsResetHandler(w http.ResponseWriter, req *http.Request) {
+	cfg.fileServerHits.Store(0)
+
+	w.WriteHeader(200)
+	w.Write([]byte("Metrics Reset"))
 }
 
 func main() {
@@ -32,6 +41,7 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 	serve_mux.HandleFunc("/metrics", apiCfg.metricsHandler)
+	serve_mux.HandleFunc("/reset", apiCfg.metricsResetHandler)
 
 	server := http.Server{
 		Handler: serve_mux,
