@@ -59,20 +59,7 @@ func (cfg *apiConfig) chirpValidationHandler(w http.ResponseWriter, req *http.Re
 	err := decoder.Decode(&req_body)
 
 	if err != nil {
-		log.Printf("Error decoding request JSON: %s", err)
-		err_body := error_body{
-			Error: "Something went wrong decoding the request, check server logs.",
-		}
-
-		dat, err := json.Marshal(err_body)
-
-		if err != nil {
-			log.Printf("Error marshalling error response JSON: %s", err)
-			w.WriteHeader(500)
-			return
-		}
-		w.WriteHeader(400)
-		w.Write(dat)
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong decoding the request, check server logs.", err)
 		return
 	}
 
