@@ -64,18 +64,7 @@ func (cfg *apiConfig) chirpValidationHandler(w http.ResponseWriter, req *http.Re
 	}
 
 	if len(req_body.Body) > 140 {
-		err_body := error_body{
-			Error: "Chirp is too long",
-		}
-
-		dat, err := json.Marshal(err_body)
-		if err != nil {
-			log.Printf("Error marshalling error response JSON: %s", err)
-			w.WriteHeader(500)
-			return
-		}
-		w.WriteHeader(400)
-		w.Write(dat)
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
 	}
 
