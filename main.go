@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sync/atomic"
 )
@@ -48,10 +47,6 @@ func (cfg *apiConfig) chirpValidationHandler(w http.ResponseWriter, req *http.Re
 		Valid bool `json:"valid"`
 	}
 
-	type error_body struct {
-		Error string `json:"error"`
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 
 	decoder := json.NewDecoder(req.Body)
@@ -68,18 +63,9 @@ func (cfg *apiConfig) chirpValidationHandler(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	resp_body := response_body{
+	respondWithJSON(w, http.StatusOK, response_body{
 		Valid: true,
-	}
-
-	dat, err := json.Marshal(resp_body)
-	if err != nil {
-		log.Printf("Error marshalling valid response JSON: %s", err)
-		w.WriteHeader(500)
-		return
-	}
-	w.WriteHeader(200)
-	w.Write(dat)
+	})
 }
 
 func main() {

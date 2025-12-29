@@ -13,10 +13,10 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 	if code > 499 {
 		log.Printf("Responding with 5XX error: %s", msg)
 	}
-	type errorResponse struct {
+	type error_body struct {
 		Error string `json:"error"`
 	}
-	respondWithJSON(w, code, errorResponse{
+	respondWithJSON(w, code, error_body{
 		Error: msg,
 	})
 }
