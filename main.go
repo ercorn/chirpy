@@ -64,43 +64,6 @@ func (cfg *apiConfig) metricsResetHandler(w http.ResponseWriter, req *http.Reque
 	w.Write([]byte("Metrics Reset"))
 }
 
-func (cfg *apiConfig) chirpValidationHandler(w http.ResponseWriter, req *http.Request) {
-	type request_body struct {
-		Body string `json:"body"`
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-
-	decoder := json.NewDecoder(req.Body)
-	req_body := request_body{}
-	err := decoder.Decode(&req_body)
-
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Something went wrong decoding the request, check server logs.", err)
-		return
-	}
-
-	if len(req_body.Body) > 140 {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
-		return
-	}
-
-	//replace profane words in body
-	resp_str_arr := strings.Split(req_body.Body, " ")
-	for i, word := range resp_str_arr {
-		lowered_word := strings.ToLower(word)
-		if lowered_word == "kerfuffle" || lowered_word == "sharbert" || lowered_word == "fornax" {
-			resp_str_arr[i] = "****"
-		}
-	}
-
-	respondWithJSON(w, http.StatusOK, struct {
-		CleanedBody string `json:"cleaned_body"`
-	}{
-		CleanedBody: strings.Join(resp_str_arr, " "),
-	})
-}
-
 func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -135,6 +98,68 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 
 }
 
+func (cfg *apiConfig) chirpsHandler(w http.ResponseWriter, req *http.Request) {
+	type request_body struct {
+		Body   string    `json:"body"`
+		UserId uuid.UUID `json:"user_id"`
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	decoder := json.NewDecoder(req.Body)
+	req_body := request_body{}
+	err := decoder.Decode(&req_body)
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Something went wrong decoding the request, check server logs.", err)
+		return
+	}
+
+	if len(req_body.Body) > 140 {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
+		return
+	}
+
+	//replace profane words in body
+	resp_str_arr := strings.Split(req_body.Body, " ")
+	for i, word := range resp_str_arr {
+		lowered_word := strings.ToLower(word)
+		if lowered_word == "kerfuffle" || lowered_word == "sharbert" || lowered_word == "fornax" {
+			resp_str_arr[i] = "****"
+		}
+	}
+	cleaned_body := strings.Join(resp_str_arr, " ")
+
+	// respondWithJSON(w, http.StatusOK, struct {
+	// 	CleanedBody string `json:"cleaned_body"`
+	// }{
+	// 	CleanedBody: strings.Join(resp_str_arr, " "),
+	// })
+
+	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
+		Body:   cleaned_body,
+		UserID: req_body.UserId,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to create chirp", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, struct {
+		Id        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserId    uuid.UUID `json:"user_id"`
+	}{
+		Id:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserId:    chirp.UserID,
+	})
+}
+
 func main() {
 	godotenv.Load()
 	db_url := os.Getenv("DB_URL")
@@ -158,8 +183,8 @@ func main() {
 	})
 	serve_mux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
 	serve_mux.HandleFunc("POST /admin/reset", apiCfg.metricsResetHandler)
-	serve_mux.HandleFunc("POST /api/validate_chirp", apiCfg.chirpValidationHandler)
 	serve_mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
+	serve_mux.HandleFunc("POST /api/chirps", apiCfg.chirpsHandler)
 
 	server := http.Server{
 		Handler: serve_mux,
