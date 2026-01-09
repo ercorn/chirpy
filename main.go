@@ -24,6 +24,14 @@ type apiConfig struct {
 	platform       string
 }
 
+type resp_chirp struct {
+	Id        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserId    uuid.UUID `json:"user_id"`
+}
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileServerHits.Add(1)
@@ -145,19 +153,35 @@ func (cfg *apiConfig) chirpsHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, struct {
-		Id        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserId    uuid.UUID `json:"user_id"`
-	}{
+	respondWithJSON(w, http.StatusCreated, resp_chirp{
 		Id:        chirp.ID,
 		CreatedAt: chirp.CreatedAt,
 		UpdatedAt: chirp.UpdatedAt,
 		Body:      chirp.Body,
 		UserId:    chirp.UserID,
 	})
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request) {
+	chirps, err := cfg.db.GetChirps(req.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to get chirps", err)
+		return
+	}
+
+	tagged_chirps := make([]resp_chirp, len(chirps))
+
+	for i, chirp := range chirps {
+		tagged_chirps[i] = resp_chirp{
+			Id:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserId:    chirp.UserID,
+		}
+	}
+
+	respondWithJSON(w, http.StatusOK, tagged_chirps)
 }
 
 func main() {
@@ -185,6 +209,7 @@ func main() {
 	serve_mux.HandleFunc("POST /admin/reset", apiCfg.metricsResetHandler)
 	serve_mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 	serve_mux.HandleFunc("POST /api/chirps", apiCfg.chirpsHandler)
+	serve_mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
 
 	server := http.Server{
 		Handler: serve_mux,
