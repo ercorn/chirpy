@@ -184,6 +184,28 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request)
 	respondWithJSON(w, http.StatusOK, tagged_chirps)
 }
 
+func (cfg *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
+	chirp_id, err := uuid.Parse(req.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Path value is not a valid UUID", err)
+		return
+	}
+
+	db_chirp, err := cfg.db.GetChirp(req.Context(), chirp_id)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Failed to get chirp", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, resp_chirp{
+		Id:        db_chirp.ID,
+		CreatedAt: db_chirp.CreatedAt,
+		UpdatedAt: db_chirp.UpdatedAt,
+		Body:      db_chirp.Body,
+		UserId:    db_chirp.UserID,
+	})
+}
+
 func main() {
 	godotenv.Load()
 	db_url := os.Getenv("DB_URL")
@@ -210,6 +232,7 @@ func main() {
 	serve_mux.HandleFunc("POST /api/users", apiCfg.createUserHandler)
 	serve_mux.HandleFunc("POST /api/chirps", apiCfg.chirpsHandler)
 	serve_mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
+	serve_mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirp)
 
 	server := http.Server{
 		Handler: serve_mux,
