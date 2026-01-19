@@ -187,7 +187,7 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, req *http.Request)
 func (cfg *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 	chirp_id, err := uuid.Parse(req.PathValue("chirpID"))
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Path value is not a valid UUID", err)
+		respondWithError(w, http.StatusBadRequest, "Path value is not a valid UUID", err)
 		return
 	}
 
