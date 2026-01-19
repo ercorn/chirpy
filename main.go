@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ercorn/chirpy/internal/auth"
 	"github.com/ercorn/chirpy/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -77,7 +78,8 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 
 	decoder := json.NewDecoder(req.Body)
 	req_body := struct {
-		Email string
+		Email    string
+		Password string
 	}{}
 	err := decoder.Decode(&req_body)
 
@@ -89,6 +91,21 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 	user, err := cfg.db.CreateUser(req.Context(), req_body.Email)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to create user", err)
+		return
+	}
+
+	hashed_password, err := auth.HashPassword(req_body.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to hash password", err)
+		return
+	}
+
+	err = cfg.db.SetPassword(req.Context(), database.SetPasswordParams{
+		HashedPassword: hashed_password,
+		ID:             user.ID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to set password", err)
 		return
 	}
 
