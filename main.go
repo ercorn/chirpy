@@ -33,6 +33,13 @@ type resp_chirp struct {
 	UserId    uuid.UUID `json:"user_id"`
 }
 
+type resp_user struct {
+	Id        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileServerHits.Add(1)
@@ -109,12 +116,7 @@ func (cfg *apiConfig) createUserHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, struct {
-		Id        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Email     string    `json:"email"`
-	}{
+	respondWithJSON(w, http.StatusCreated, resp_user{
 		Id:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
@@ -223,6 +225,39 @@ func (cfg *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 	})
 }
 
+func (cfg *apiConfig) login(w http.ResponseWriter, req *http.Request) {
+	req_body := struct {
+		Password string
+		Email    string
+	}{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&req_body)
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to decode request", err)
+		return
+	}
+
+	user, err := cfg.db.GetUserByEmail(req.Context(), req_body.Email)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
+	}
+
+	is_correct, err := auth.CheckPasswordHash(req_body.Password, user.HashedPassword)
+	if err != nil || !is_correct {
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password", err)
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, resp_user{
+		Id:        user.ID,
+		CreatedAt: user.CreatedAt,
+		UpdatedAt: user.UpdatedAt,
+		Email:     user.Email,
+	})
+}
+
 func main() {
 	godotenv.Load()
 	db_url := os.Getenv("DB_URL")
@@ -250,6 +285,7 @@ func main() {
 	serve_mux.HandleFunc("POST /api/chirps", apiCfg.chirpsHandler)
 	serve_mux.HandleFunc("GET /api/chirps", apiCfg.getChirpsHandler)
 	serve_mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirp)
+	serve_mux.HandleFunc("POST /api/login", apiCfg.login)
 
 	server := http.Server{
 		Handler: serve_mux,

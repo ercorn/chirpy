@@ -8,3 +8,6 @@ DELETE FROM users;
 
 -- name: SetPassword :exec
 UPDATE users SET hashed_password = $1 WHERE id = $2;
+
+-- name: GetUserByEmail :one
+SELECT * FROM users WHERE email = $1;
