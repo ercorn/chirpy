@@ -250,7 +250,7 @@ func (cfg *apiConfig) login(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, resp_user{
+	respondWithJSON(w, http.StatusOK, resp_user{
 		Id:        user.ID,
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
