@@ -26,10 +26,31 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		Subject:   userID.String(),
 	})
 
-	signedStr, err := jwtToken.SignedString(tokenSecret)
+	signedStr, err := jwtToken.SignedString([]byte(tokenSecret))
 	if err != nil {
 		return "", err
 	}
 
 	return signedStr, nil
+}
+
+func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
+	jwtToken, err := jwt.ParseWithClaims(tokenString, jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
+		return []byte(tokenSecret), nil
+	})
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	userIDStr, err := jwtToken.Claims.GetSubject()
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	return userID, nil
 }
