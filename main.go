@@ -23,6 +23,7 @@ type apiConfig struct {
 	fileServerHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	secret         string
 }
 
 type resp_chirp struct {
@@ -142,6 +143,22 @@ func (cfg *apiConfig) chirpsHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	//validate jwt and get bearer
+	bearer_token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to get bearer token", err)
+		return
+	}
+
+	token_user_id, err := auth.ValidateJWT(bearer_token, cfg.secret)
+	_ = token_user_id
+	log.Println("TOKEN USER ID:", token_user_id)
+	log.Println("REQ USER ID:", req_body.UserId.String())
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Failed validation", err)
+		return
+	}
+
 	if len(req_body.Body) > 140 {
 		respondWithError(w, http.StatusBadRequest, "Chirp is too long", nil)
 		return
@@ -165,7 +182,7 @@ func (cfg *apiConfig) chirpsHandler(w http.ResponseWriter, req *http.Request) {
 
 	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
 		Body:   cleaned_body,
-		UserID: req_body.UserId,
+		UserID: token_user_id,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to create chirp", err)
@@ -227,8 +244,9 @@ func (cfg *apiConfig) getChirp(w http.ResponseWriter, req *http.Request) {
 
 func (cfg *apiConfig) login(w http.ResponseWriter, req *http.Request) {
 	req_body := struct {
-		Password string
-		Email    string
+		Password         string
+		Email            string
+		ExpiresInSeconds *int
 	}{}
 	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&req_body)
@@ -250,17 +268,40 @@ func (cfg *apiConfig) login(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, resp_user{
-		Id:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
-	})
+	exp_time := 0
+	if req_body.ExpiresInSeconds == nil || *req_body.ExpiresInSeconds > 3600 {
+		exp_time = 3600
+	} else {
+		exp_time = *req_body.ExpiresInSeconds
+	}
+	exp_duration, _ := time.ParseDuration(fmt.Sprintf("%vs", exp_time))
+
+	jwt_token, err := auth.MakeJWT(user.ID, cfg.secret, exp_duration)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to get jwt token", err)
+		return
+	}
+
+	response := struct {
+		resp_user
+		Token string `json:"token"`
+	}{
+		resp_user: resp_user{
+			Id:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token: jwt_token,
+	}
+
+	respondWithJSON(w, http.StatusOK, response)
 }
 
 func main() {
 	godotenv.Load()
 	db_url := os.Getenv("DB_URL")
+	secret := os.Getenv("SECRET")
 	db, err := sql.Open("postgres", db_url)
 	if err != nil {
 		log.Fatalf("Failed to open a connection to the database: %v", err)
@@ -271,6 +312,7 @@ func main() {
 	apiCfg := apiConfig{
 		db:       dbQueries,
 		platform: os.Getenv("PLATFORM"),
+		secret:   secret,
 	}
 	serve_mux := http.NewServeMux()
 	serve_mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))

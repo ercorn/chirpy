@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -64,8 +65,12 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return bearer_token, errors.New("authorization header doesn't exist")
 	}
 
+	log.Println("AUTH HEADER CONTENTS:", bearer_token)
+
 	bearer_token = strings.TrimPrefix(bearer_token, "Bearer ")
+	log.Println("PREFIX TRIMMED:", bearer_token)
 	bearer_token = strings.TrimSpace(bearer_token)
+	log.Println("SPACES REMOVED:", bearer_token)
 
 	return bearer_token, nil
 }
