@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"log"
 	"net/http"
@@ -73,4 +75,11 @@ func GetBearerToken(headers http.Header) (string, error) {
 	log.Println("SPACES REMOVED:", bearer_token)
 
 	return bearer_token, nil
+}
+
+func MakeRefreshToken() string {
+	rand_bytes := make([]byte, 32)
+	rand.Read(rand_bytes)
+
+	return hex.EncodeToString(rand_bytes)
 }
